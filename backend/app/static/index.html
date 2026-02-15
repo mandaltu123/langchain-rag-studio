@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LocalRAG Studio</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; max-width: 980px; }
+      h1 { margin-bottom: 8px; }
+      .row { display: flex; gap: 16px; flex-wrap: wrap; }
+      .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; flex: 1; min-width: 280px; }
+      textarea { width: 100%; min-height: 120px; }
+      input[type="text"] { width: 100%; }
+      button { padding: 8px 12px; margin-top: 8px; }
+      .spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid #ccc;
+        border-top-color: #444;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        vertical-align: middle;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .meta { color: #666; font-size: 12px; margin-top: 6px; }
+      pre { background: #f7f7f7; padding: 12px; border-radius: 6px; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>LocalRAG Studio</h1>
+    <p>Upload documents and chat with your local LLM.</p>
+
+    <div class="row">
+      <div class="card">
+        <h3>Upload PDF</h3>
+        <input id="pdfFile" type="file" accept="application/pdf" />
+        <button id="pdfBtn" onclick="uploadPdf()">Upload PDF</button>
+        <span id="pdfLoading" class="spinner" style="display:none;"></span>
+        <div class="meta" id="pdfMeta"></div>
+        <pre id="pdfResult"></pre>
+      </div>
+      <div class="card">
+        <h3>Upload FAQ CSV</h3>
+        <input id="csvFile" type="file" accept="text/csv" />
+        <button id="csvBtn" onclick="uploadCsv()">Upload CSV</button>
+        <div class="meta" id="csvMeta"></div>
+        <pre id="csvResult"></pre>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+      <h3>Chat</h3>
+      <label for="sourceSelect">Source</label>
+      <select id="sourceSelect"></select>
+      <input id="sessionId" type="text" placeholder="Session ID (optional)" />
+      <textarea id="message" placeholder="Ask a question..."></textarea>
+      <button id="sendBtn" onclick="sendChat()">Send</button>
+      <span id="chatLoading" class="spinner" style="display:none; margin-left:8px;"></span>
+      <div class="meta" id="chatResultMeta"></div>
+      <pre id="chatResult"></pre>
+    </div>
+    <div class="card" style="margin-top: 16px;">
+      <h3>Suggestions</h3>
+      <div id="suggestions"></div>
+    </div>
+
+    <script>
+      function renderJson(targetId, metaId, data) {
+        const target = document.getElementById(targetId);
+        const meta = document.getElementById(metaId);
+        target.textContent = JSON.stringify(data, null, 2);
+        if (data.answer) {
+          meta.textContent = 'Answer and citations shown below.';
+        } else if (data.chunks_added !== undefined) {
+          meta.textContent = `Chunks added: ${data.chunks_added}`;
+        } else {
+          meta.textContent = '';
+        }
+      }
+
+      async function uploadPdf() {
+        const file = document.getElementById('pdfFile').files[0];
+        if (!file) return;
+        const form = new FormData();
+        form.append('file', file);
+        const btn = document.getElementById('pdfBtn');
+        const loading = document.getElementById('pdfLoading');
+        btn.disabled = true;
+        loading.style.display = 'inline-block';
+        try {
+          const res = await fetch('/ingest/pdf', { method: 'POST', body: form });
+          const data = await res.json();
+          renderJson('pdfResult', 'pdfMeta', data);
+        } finally {
+          btn.disabled = false;
+          loading.style.display = 'none';
+        }
+      }
+
+      async function uploadCsv() {
+        const file = document.getElementById('csvFile').files[0];
+        if (!file) return;
+        const form = new FormData();
+        form.append('file', file);
+        const btn = document.getElementById('csvBtn');
+        btn.disabled = true;
+        try {
+          const res = await fetch('/ingest/faq_csv', { method: 'POST', body: form });
+          const data = await res.json();
+          renderJson('csvResult', 'csvMeta', data);
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      async function sendChat() {
+        const message = document.getElementById('message').value;
+        const sessionId = document.getElementById('sessionId').value;
+        const source = document.getElementById('sourceSelect').value;
+        const payload = { message, session_id: sessionId || null, top_k: 4 };
+        if (source && source !== 'all') {
+          payload.source = source;
+        }
+        const btn = document.getElementById('sendBtn');
+        const loading = document.getElementById('chatLoading');
+        btn.disabled = true;
+        loading.style.display = 'inline';
+        try {
+          const res = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          renderJson('chatResult', 'chatResultMeta', data);
+        } finally {
+          btn.disabled = false;
+          loading.style.display = 'none';
+        }
+      }
+
+      async function loadSources() {
+        const res = await fetch('/stats');
+        const data = await res.json();
+        const select = document.getElementById('sourceSelect');
+        select.innerHTML = '';
+        const allOption = document.createElement('option');
+        allOption.value = 'all';
+        allOption.textContent = 'All sources';
+        select.appendChild(allOption);
+        (data.sources || []).forEach((item) => {
+          const opt = document.createElement('option');
+          opt.value = item.source;
+          opt.textContent = `${item.source} (${item.chunks})`;
+          select.appendChild(opt);
+        });
+      }
+
+      async function loadSuggestions() {
+        const select = document.getElementById('sourceSelect');
+        const source = select.value;
+        const url = source && source !== 'all'
+          ? `/suggestions?source=${encodeURIComponent(source)}`
+          : '/suggestions';
+        const res = await fetch(url);
+        const data = await res.json();
+        const list = document.getElementById('suggestions');
+        list.innerHTML = '';
+        (data.suggestions || []).forEach((text) => {
+          const btn = document.createElement('button');
+          btn.textContent = text;
+          btn.onclick = () => {
+            document.getElementById('message').value = text;
+          };
+          btn.style.marginRight = '8px';
+          btn.style.marginBottom = '8px';
+          list.appendChild(btn);
+        });
+      }
+
+      document.getElementById('sourceSelect').addEventListener('change', loadSuggestions);
+      loadSources().then(loadSuggestions);
+    </script>
+  </body>
+</html>
