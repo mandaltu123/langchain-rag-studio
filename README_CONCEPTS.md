@@ -44,12 +44,45 @@ The model must return:
 If the context is insufficient, the answer is:
 `I don't know based on the provided documents.`
 
+## LangChain workflow (small)
+
+1) **Ingest**: Load files → chunk → embed → store in Chroma.
+2) **Retrieve**: For a question, fetch top‑k similar chunks (optionally filtered by source).
+3) **Route / Tools**: A small LCEL runnable decides if we should call a tool or do normal RAG.
+4) **Generate**: Build a grounded prompt with context + citations → local LLM returns JSON.
+5) **Validate**: If JSON is malformed or missing citations, retry once with a fix‑format prompt.
+
 ## LangChain Runnables (LCEL)
-We use LangChain LCEL for:
+We use LCEL for:
 - Routing decisions (tool use vs. normal chat)
 - Tool execution
 
 This avoids deprecated APIs and keeps the chain small and deterministic.
+
+## Diagram
+
+```
+User Question
+     |
+     v
+  Retriever (Chroma + embeddings)
+     |
+     +--> LCEL Router ----> Tool? ----> Tool Output
+     |            |
+     |            v
+     |        Normal RAG
+     v
+ Grounded Prompt (context + citations)
+     |
+     v
+ Local LLM (Ollama / llama.cpp)
+     |
+     v
+ JSON Response (answer, citations, followups)
+     |
+     v
+ Validation + Retry (if needed)
+```
 
 ## Tool Calling
 The assistant can call a limited set of tools:
