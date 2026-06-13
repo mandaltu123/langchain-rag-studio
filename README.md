@@ -1,5 +1,12 @@
 # RAG Studio (LangChain)
 
+![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-RAG-1C3C3C?logo=langchain&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-green?logo=fastapi&logoColor=white)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-orange)
+![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-black)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
 **A modular, LangChain-powered RAG backend** with swappable embedding models, pluggable vector stores, and a clean FastAPI interface. Built as a production-ready RAG foundation — swap in any LLM or vector store without rewriting the pipeline.
 
 ## What It Does
@@ -76,3 +83,7 @@ LocalRAGStudio-Langchain/
 ├── tests/
 └── requirements.txt
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE)
