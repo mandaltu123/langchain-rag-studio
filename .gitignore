@@ -7,3 +7,5 @@ __pycache__/
 .env
 backend/.chroma/
 .pytest_cache/
+.idea/
+.ipynb_checkpoints/
